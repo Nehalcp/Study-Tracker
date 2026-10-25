@@ -46,7 +46,12 @@
 </div>
 <div class="footer">Study consistently. Progress follows. · Completed sessions are stored on this device and sync to your account when signed in.</div>
 </main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+const SUPABASE_URL="https://vatucebkfmubzmwrnrue.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_W1fRzWd085ijr6b4klq7jA_gaAbRzmM";
+const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+let currentUser=null, cloudReady=false, cloudBusy=false;
 const $=id=>document.getElementById(id), STORE='studyTracker.sessions.v1', ACTIVE='studyTracker.active.v1';
 let sessions=load(STORE,[]), active=load(ACTIVE,null), tick=null;
 function load(k,f){try{const v=localStorage.getItem(k);return v?JSON.parse(v):f}catch{return f}}
