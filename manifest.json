@@ -1,0 +1,20 @@
+{
+  "id": "./",
+  "name": "Study Tracker",
+  "short_name": "Study Tracker",
+  "description": "Track study sessions, subjects, and consistency.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#10131d",
+  "theme_color": "#10131d",
+  "icons": [
+    {
+      "src": "./app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
