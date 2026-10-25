@@ -12,6 +12,7 @@
 .auth-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}[hidden]{display:none!important}
 .auth-row input{min-width:180px;flex:1;background:#101522;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .auth-status{color:var(--muted);font-size:13px;margin-top:8px}
+.heatmap-wrap{overflow-x:auto;margin-top:16px;padding-bottom:4px}.heatmap{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,12px);grid-auto-columns:12px;gap:4px;min-width:max-content}.heat-cell{width:12px;height:12px;border-radius:3px;background:#252c3b;position:relative}.heat-cell[data-level="1"]{background:#345b55}.heat-cell[data-level="2"]{background:#398d73}.heat-cell[data-level="3"]{background:#4cc99a}.heat-cell[data-level="4"]{background:#9af0c9}.heat-cell.empty-day{background:transparent}.heat-legend{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}.heat-legend-scale{display:flex;align-items:center;gap:4px}.heat-legend-scale .heat-cell{display:inline-block}.heat-months{display:flex;gap:0;min-width:max-content;margin-bottom:6px;color:var(--muted);font-size:11px}.heat-months span{width:16px;flex-shrink:0}.heat-summary{color:var(--muted);font-size:12px}
 </style>
 </head>
 <body><main class="wrap">
@@ -44,7 +45,7 @@
 </div>
 <div class="lower">
 <section class="panel"><div class="section-title"><h2>Time by subject</h2><span class="subtle">All time</span></div><div class="subject-list" id="subjectList"></div></section>
-<section class="panel"><div class="history-head"><h2>Recent sessions</h2></div><div class="sessions" id="sessions"></div></section>
+<section class="panel"><div class="section-title"><h2>Study activity</h2><span class="subtle" id="heatmapRange">Since you started</span></div><p class="subtle">Your study consistency, day by day.</p><div class="heatmap-wrap"><div class="heat-months" id="heatMonths"></div><div class="heatmap" id="studyHeatmap" aria-label="Study activity heatmap"></div></div><div class="heat-legend"><span class="heat-summary" id="heatSummary">Complete a study session to start building your activity map.</span><div class="heat-legend-scale"><span class="subtle">Less</span><i class="heat-cell"></i><i class="heat-cell" data-level="1"></i><i class="heat-cell" data-level="2"></i><i class="heat-cell" data-level="3"></i><i class="heat-cell" data-level="4"></i><span class="subtle">More</span></div></div></section>
 </div>
 <div class="footer">Study consistently. Progress follows. · Completed sessions are stored on this device and sync to your account when signed in.</div>
 </main>
@@ -56,6 +57,7 @@ const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHA
 let currentUser=null, cloudReady=false, cloudBusy=false;
 const $=id=>document.getElementById(id), STORE='studyTracker.sessions.v1', ACTIVE='studyTracker.active.v1';
 let sessions=load(STORE,[]), active=load(ACTIVE,null), tick=null;
+if(!localStorage.getItem('studyTracker.firstUsed'))localStorage.setItem('studyTracker.firstUsed',new Date().toISOString().slice(0,10));
 function load(k,f){try{const v=localStorage.getItem(k);return v?JSON.parse(v):f}catch{return f}}
 function save(){localStorage.setItem(STORE,JSON.stringify(sessions));if(active)localStorage.setItem(ACTIVE,JSON.stringify(active));else localStorage.removeItem(ACTIVE)}
 function setAuthMessage(message){$('authMessage').textContent=message}
@@ -82,10 +84,39 @@ function runTick(){clearInterval(tick);tick=setInterval(()=>{if(active){$('clock
 function totalFor(s){return duration(s)}
 function allSessions(){return active?[{...active,durationMs:elapsed(active)} ,...sessions]:sessions}
 function renderStats(){const all=allSessions(),now=new Date(),start=dayStart(),week=new Date(now);week.setHours(0,0,0,0);week.setDate(week.getDate()-((week.getDay()+6)%7));const ws=week.getTime();const today=all.filter(s=>s.startAt>=start).reduce((a,s)=>a+totalFor(s),0);const weekly=all.filter(s=>s.startAt>=ws).reduce((a,s)=>a+totalFor(s),0);$('todayTotal').textContent=short(today);$('weekTotal').textContent=short(weekly);$('sessionCount').textContent=sessions.length}
-function render(){const now=new Date();$('today').textContent=now.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric',year:'numeric'});$('startBtn').hidden=!!active;$('pauseBtn').hidden=!active;$('stopBtn').hidden=!active;$('subject').disabled=!!active;$('description').disabled=!!active;$('pauseBtn').textContent=active&&active.runningSince?'Ⅱ Pause':'▶ Resume';$('statusText').textContent=!active?'Ready when you are':active.runningSince?'Study session in progress':'Session paused';$('liveDot').classList.toggle('live',!!(active&&active.runningSince));$('clock').textContent=active?fmt(elapsed(active)):'00:00:00';renderStats();renderWeek();renderSubjects();renderHistory()}
+function render(){const now=new Date();$('today').textContent=now.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric',year:'numeric'});$('startBtn').hidden=!!active;$('pauseBtn').hidden=!active;$('stopBtn').hidden=!active;$('subject').disabled=!!active;$('description').disabled=!!active;$('pauseBtn').textContent=active&&active.runningSince?'Ⅱ Pause':'▶ Resume';$('statusText').textContent=!active?'Ready when you are':active.runningSince?'Study session in progress':'Session paused';$('liveDot').classList.toggle('live',!!(active&&active.runningSince));$('clock').textContent=active?fmt(elapsed(active)):'00:00:00';renderStats();renderWeek();renderSubjects();renderHeatmap()}
 function renderWeek(){const el=$('weekChart'),now=new Date(),mon=new Date(now);mon.setHours(0,0,0,0);mon.setDate(mon.getDate()-((mon.getDay()+6)%7));const all=allSessions(),vals=[];for(let i=0;i<7;i++){const d=new Date(mon);d.setDate(mon.getDate()+i);const start=d.getTime(),end=start+86400000;const v=all.filter(s=>s.startAt>=start&&s.startAt<end).reduce((a,s)=>a+totalFor(s),0);vals.push({d,v})}const max=Math.max(...vals.map(x=>x.v),3600000);el.innerHTML=vals.map(({d,v})=>'<div class="day"><span>'+ (v?short(v):'')+'</span><div class="barbox"><div class="bar '+(dayKey(d)===dayKey(now)?'todaybar':'')+'" style="height:'+Math.max(v?5:2,v/max*100)+'%"></div></div><span>'+d.toLocaleDateString(undefined,{weekday:'short'} )+'</span></div>').join('')}
 function renderSubjects(){const sums={};allSessions().forEach(s=>{const key=s.subject||'Uncategorised';sums[key]=(sums[key]||0)+totalFor(s)});const items=Object.entries(sums).sort((a,b)=>b[1]-a[1]);const el=$('subjectList');if(!items.length){el.innerHTML='<div class="empty">Your subject breakdown will appear after your first session.</div>';return}const max=items[0][1];el.innerHTML=items.slice(0,8).map(([name,ms])=>'<div class="subject-row"><span>'+esc(name)+'</span><strong>'+short(ms)+'</strong><div class="track"><div class="fill" style="width:'+Math.max(2,ms/max*100)+'%"></div></div></div>').join('')}
 function renderHistory(){const el=$('sessions');if(!sessions.length){el.innerHTML='<div class="empty">No completed sessions yet.<br>Start your first study session above.</div>';return}el.innerHTML=sessions.slice(0,20).map(s=>'<article class="session"><div><h3>'+esc(s.subject)+'</h3><p>'+esc(s.description||'No description added')+'</p><p style="margin-top:6px">'+new Date(s.startAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})+' · '+new Date(s.startAt).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})+'</p></div><div style="text-align:right"><div class="duration">'+short(duration(s))+'</div><button class="secondary smallbtn" style="margin-top:8px" data-delete="'+s.id+'">Delete</button></div></article>').join('');el.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>{if(confirm('Delete this study session?')){sessions=sessions.filter(s=>String(s.id)!==b.dataset.delete);save();render()}}))}
+function renderHeatmap(){
+const all=allSessions(),today=new Date();today.setHours(0,0,0,0);
+const storedStart=localStorage.getItem('studyTracker.firstUsed');
+const firstSession=all.reduce((min,s)=>Math.min(min,s.startAt||Date.now()),Date.now());
+let start=storedStart?new Date(storedStart+'T00:00:00').getTime():dayStart(new Date(firstSession));
+if(!Number.isFinite(start)||start>today.getTime())start=today.getTime();
+start=new Date(start);start.setHours(0,0,0,0);
+const counts={};all.forEach(s=>{const key=dayKey(s.startAt);counts[key]=(counts[key]||0)+duration(s)});
+const days=Math.max(1,Math.floor((today.getTime()-start.getTime())/86400000)+1);
+const paddedStart=new Date(start);paddedStart.setDate(paddedStart.getDate()-paddedStart.getDay());
+const totalCells=Math.ceil((days+paddedStart.getDay())/7)*7;
+const map=$('studyHeatmap');map.innerHTML='';const months=$('heatMonths');months.innerHTML='';
+let previousMonth=-1,monthLabels=[];
+for(let i=0;i<totalCells;i++){
+const d=new Date(paddedStart);d.setDate(paddedStart.getDate()+i);
+if(d.getMonth()!==previousMonth&&d<=today){monthLabels.push({index:i,name:d.toLocaleDateString(undefined,{month:'short'})});previousMonth=d.getMonth()}
+const key=dayKey(d),ms=counts[key]||0,cell=document.createElement('div');
+cell.className='heat-cell'+(d<start||d>today?' empty-day':'');
+const level=ms<=0?0:ms<1800000?1:ms<3600000?2:ms<7200000?3:4;
+cell.dataset.level=String(level);
+if(d>=start&&d<=today)cell.title=d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})+': '+short(ms)+' studied';
+map.appendChild(cell)
+}
+monthLabels.forEach(m=>{const label=document.createElement('span');label.textContent=m.name;label.style.marginLeft=(m.index===0?0:0)+'px';months.appendChild(label)});
+$('heatmapRange').textContent=start.toLocaleDateString(undefined,{month:'short',year:'numeric'})+' – present';
+const activeDays=Object.keys(counts).filter(k=>counts[k]>0&&new Date(k+'T00:00:00')>=start).length;
+const total=all.reduce((sum,s)=>sum+duration(s),0);
+$('heatSummary').textContent=activeDays+' active '+(activeDays===1?'day':'days')+' · '+short(total)+' studied in total';
+}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 $('startBtn').addEventListener('click',start);$('pauseBtn').addEventListener('click',pause);$('stopBtn').addEventListener('click',stop);
 $('exportBtn').addEventListener('click',()=>{const rows=[['Date','Subject','Description','Start time','End time','Duration seconds'],...sessions.map(s=>[new Date(s.startAt).toISOString(),s.subject,s.description,new Date(s.startAt).toLocaleTimeString(),new Date(s.endAt).toLocaleTimeString(),Math.round(duration(s)/1000)])];const csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\\r\\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='study-sessions.csv';a.click();URL.revokeObjectURL(a.href)});
