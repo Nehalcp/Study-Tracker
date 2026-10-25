@@ -57,7 +57,10 @@ const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHA
 let currentUser=null, cloudReady=false, cloudBusy=false;
 const $=id=>document.getElementById(id), STORE='studyTracker.sessions.v1', ACTIVE='studyTracker.active.v1';
 let sessions=load(STORE,[]), active=load(ACTIVE,null), tick=null;
-if(!localStorage.getItem('studyTracker.firstUsed'))localStorage.setItem('studyTracker.firstUsed',new Date().toISOString().slice(0,10));
+const firstRecordedSession=sessions.reduce((min,s)=>Math.min(min,s.startAt||Date.now()),Date.now());
+const recordedStart=new Date(firstRecordedSession).toISOString().slice(0,10);
+const savedFirstUsed=localStorage.getItem('studyTracker.firstUsed');
+if(!savedFirstUsed||recordedStart<savedFirstUsed)localStorage.setItem('studyTracker.firstUsed',recordedStart);
 function load(k,f){try{const v=localStorage.getItem(k);return v?JSON.parse(v):f}catch{return f}}
 function save(){localStorage.setItem(STORE,JSON.stringify(sessions));if(active)localStorage.setItem(ACTIVE,JSON.stringify(active));else localStorage.removeItem(ACTIVE)}
 function setAuthMessage(message){$('authMessage').textContent=message}
